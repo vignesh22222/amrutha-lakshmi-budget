@@ -21,13 +21,8 @@ table{width:100%;border-collapse:collapse;margin-top:8px}
 th,td{border:1px solid #ccc;padding:6px;font-size:13px}
 .flex{display:flex;gap:8px;flex-wrap:wrap}
 .hidden{display:none}
-.lock{
-  position:fixed;inset:0;background:rgba(0,0,0,.6);
-  display:flex;align-items:center;justify-content:center
-}
-.lock-card{
-  background:#fff;padding:20px;border-radius:12px;width:280px
-}
+.lock{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center}
+.lock-card{background:#fff;padding:20px;border-radius:12px;width:280px}
 </style>
 </head>
 
@@ -61,17 +56,14 @@ th,td{border:1px solid #ccc;padding:6px;font-size:13px}
 
 <script>
 const { jsPDF } = window.jspdf;
-const KEY="ALE_BUDGET_RS_FINAL";
+const KEY="ALE_BUDGET_FINAL_OK";
 
-/* --------- HELPERS --------- */
-function formatAmount(n){
-  return String(Math.round(Number(n||0)));
-}
+/* ---------- HELPERS ---------- */
 function rs(n){
-  return "Rs. " + formatAmount(n);
+  return "Rs. " + String(Math.round(Number(n||0)));
 }
 
-/* --------- DATA --------- */
+/* ---------- DATA ---------- */
 let db = JSON.parse(localStorage.getItem(KEY)) || {
   pin:"0000",
   entries:[]
@@ -79,7 +71,7 @@ let db = JSON.parse(localStorage.getItem(KEY)) || {
 let current=null;
 function save(){localStorage.setItem(KEY,JSON.stringify(db));}
 
-/* --------- LOCK --------- */
+/* ---------- LOCK ---------- */
 function unlock(){
   if(pinInput.value===db.pin){
     lock.style.display="none";
@@ -92,14 +84,11 @@ function resetPin(){
   if(p && p.length>=3){db.pin=p;save();alert("PIN Updated")}
 }
 
-/* --------- TELUGU UI --------- */
-const dict={
-  cement:"సిమెంట్",steel:"స్టీల్",sand:"ఇసుక",
-  bricks:"ఇటుకలు",labour:"కూలీ"
-};
+/* ---------- TELUGU UI ---------- */
+const dict={cement:"సిమెంట్",steel:"స్టీల్",sand:"ఇసుక",bricks:"ఇటుకలు",labour:"కూలీ"};
 function toTelugu(v){return dict[v.toLowerCase()]||v}
 
-/* --------- HOME --------- */
+/* ---------- HOME ---------- */
 function renderHome(){
   home.classList.remove("hidden");
   entryPage.classList.add("hidden");
@@ -121,7 +110,7 @@ function addEntry(){
     items:[],
     settlement:[
       {name:"K. VIGNESH",paid:false},
-      {name:"A. PRADDEP REDDY",paid:false}
+      {name:"PRADEEP REDDY",paid:false}
     ]
   });
   save();renderHome();
@@ -132,7 +121,7 @@ function deleteEntry(i){
   }
 }
 
-/* --------- ENTRY --------- */
+/* ---------- ENTRY ---------- */
 function openEntry(i){
   current=i;
   home.classList.add("hidden");
@@ -185,7 +174,7 @@ function renderEntry(){
   </div>`;
 }
 
-/* --------- ENTRY HANDLERS --------- */
+/* ---------- ENTRY HANDLERS ---------- */
 function addRow(){
   db.entries[current].items.push({paidFor_en:"",paidFor_te:"",amount:""});
   save();renderEntry();
@@ -203,7 +192,7 @@ function sPaid(n,v){
 }
 function saveEntry(){alert("Entry Saved");renderHome()}
 
-/* --------- PDF (Rs. ONLY – SAFE) --------- */
+/* ---------- PDF (MOBILE SAFE + TOTAL INCLUDED) ---------- */
 function downloadPDF(){
   const e=db.entries[current];
   const doc=new jsPDF();
@@ -223,8 +212,16 @@ function downloadPDF(){
 
   const total=e.items.reduce((s,x)=>s+Number(x.amount||0),0);
 
+  // TOTAL BELOW TABLE
+  doc.setFontSize(12);
+  doc.text(
+    "TOTAL AMOUNT : " + rs(total),
+    14,
+    doc.lastAutoTable.finalY + 10
+  );
+
   doc.autoTable({
-    startY:doc.lastAutoTable.finalY+10,
+    startY:doc.lastAutoTable.finalY + 20,
     head:[["Name","Amount","Status"]],
     body:e.settlement.map(s=>[
       s.name,
@@ -233,14 +230,18 @@ function downloadPDF(){
     ])
   });
 
-  doc.save(`Entry-${current+1}-${e.date}.pdf`);
+  // MOBILE SAFE OPEN
+  const blobUrl = doc.output("bloburl");
+  window.open(blobUrl,"_blank");
 }
 
-/* --------- EXPORT ALL --------- */
+/* ---------- EXPORT ALL (MOBILE SAFE) ---------- */
 function exportAll(){
   const doc=new jsPDF();
+
   db.entries.forEach((e,i)=>{
     if(i>0) doc.addPage();
+
     doc.text("AMRUTHA LAKSHMI ENCLAVE – BUDGET SUMMARY",10,10);
     doc.text(`Entry ${i+1} | Date: ${e.date}`,10,18);
 
@@ -253,8 +254,13 @@ function exportAll(){
         rs(it.amount)
       ])
     });
+
+    const total=e.items.reduce((s,x)=>s+Number(x.amount||0),0);
+    doc.text("TOTAL AMOUNT : " + rs(total),14,doc.lastAutoTable.finalY+10);
   });
-  doc.save("All-Entries.pdf");
+
+  const blobUrl = doc.output("bloburl");
+  window.open(blobUrl,"_blank");
 }
 </script>
 
