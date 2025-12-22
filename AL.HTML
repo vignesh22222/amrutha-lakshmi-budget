@@ -56,14 +56,14 @@ th,td{border:1px solid #ccc;padding:6px;font-size:13px}
 
 <script>
 const { jsPDF } = window.jspdf;
-const KEY="ALE_BUDGET_FINAL";
+const KEY="ALE_BUDGET_FINAL_V2";
 
-/* --------- HELPERS --------- */
+/* ---------- HELPERS ---------- */
 function rs(n){
   return "Rs. " + String(Math.round(Number(n||0)));
 }
 
-/* --------- DATA --------- */
+/* ---------- DATA ---------- */
 let db = JSON.parse(localStorage.getItem(KEY)) || {
   pin:"0000",
   entries:[]
@@ -71,7 +71,32 @@ let db = JSON.parse(localStorage.getItem(KEY)) || {
 let current=null;
 function save(){localStorage.setItem(KEY,JSON.stringify(db));}
 
-/* --------- LOCK --------- */
+/* ---------- TOTAL CALCULATIONS ---------- */
+function getGrandTotal(){
+  let total = 0;
+  db.entries.forEach(e=>{
+    e.items.forEach(it=>{
+      total += Number(it.amount || 0);
+    });
+  });
+  return total;
+}
+
+function getMonthWiseTotals(){
+  const map = {};
+  db.entries.forEach(e=>{
+    if(!e.date) return;
+    const d = new Date(e.date);
+    const key = d.toLocaleString("en-IN",{month:"long",year:"numeric"});
+    if(!map[key]) map[key] = 0;
+    e.items.forEach(it=>{
+      map[key] += Number(it.amount || 0);
+    });
+  });
+  return map;
+}
+
+/* ---------- LOCK ---------- */
 function unlock(){
   if(pinInput.value===db.pin){
     lock.style.display="none";
@@ -84,17 +109,36 @@ function resetPin(){
   if(p && p.length>=3){db.pin=p;save();alert("PIN Updated")}
 }
 
-/* --------- TELUGU UI --------- */
-const dict={cement:"సిమెంట్",steel:"స్టీల్",sand:"ఇసుక",bricks:"ఇటుకలు",labour:"కూలీ"};
-function toTelugu(v){return dict[v.toLowerCase()]||v}
-
-/* --------- HOME --------- */
+/* ---------- HOME ---------- */
 function renderHome(){
   home.classList.remove("hidden");
   entryPage.classList.add("hidden");
-  entryList.innerHTML="";
+
+  const grandTotal = getGrandTotal();
+  const monthTotals = getMonthWiseTotals();
+
+  let monthRows = "";
+  Object.keys(monthTotals).forEach(m=>{
+    monthRows += `<tr><td>${m}</td><td>${rs(monthTotals[m])}</td></tr>`;
+  });
+
+  entryList.innerHTML = `
+    <div class="card">
+      <h3>📊 Overall Summary</h3>
+      <p><b>Total Entries Amount:</b> ${rs(grandTotal)}</p>
+    </div>
+
+    <div class="card">
+      <h3>📅 Month-wise Summary</h3>
+      <table>
+        <tr><th>Month</th><th>Total Amount</th></tr>
+        ${monthRows || `<tr><td colspan="2">No data</td></tr>`}
+      </table>
+    </div>
+  `;
+
   db.entries.forEach((e,i)=>{
-    entryList.innerHTML+=`
+    entryList.innerHTML += `
       <div class="card">
         <b>Entry ${i+1}</b> | ${e.date}
         <div class="flex">
@@ -104,6 +148,7 @@ function renderHome(){
       </div>`;
   });
 }
+
 function addEntry(){
   db.entries.push({
     date:new Date().toISOString().slice(0,10),
@@ -121,13 +166,14 @@ function deleteEntry(i){
   }
 }
 
-/* --------- ENTRY --------- */
+/* ---------- ENTRY ---------- */
 function openEntry(i){
   current=i;
   home.classList.add("hidden");
   entryPage.classList.remove("hidden");
   renderEntry();
 }
+
 function renderEntry(){
   const e=db.entries[current];
   const total=e.items.reduce((s,x)=>s+Number(x.amount||0),0);
@@ -138,11 +184,11 @@ function renderEntry(){
     <input type="date" value="${e.date}" onchange="eDate(this.value)">
 
     <table>
-      <tr><th>S.NO</th><th>Paid For (Telugu)</th><th>Amount</th></tr>
+      <tr><th>S.NO</th><th>Paid For</th><th>Amount</th></tr>
       ${e.items.map((it,i)=>`
       <tr>
         <td>${i+1}</td>
-        <td><input value="${it.paidFor_te||''}" onblur="eName(${i},this.value)"></td>
+        <td><input value="${it.paidFor||''}" oninput="eName(${i},this.value)"></td>
         <td><input type="number" value="${it.amount||''}" oninput="eAmt(${i},this.value)"></td>
       </tr>`).join("")}
     </table>
@@ -174,16 +220,11 @@ function renderEntry(){
   </div>`;
 }
 
-/* --------- ENTRY HANDLERS --------- */
 function addRow(){
-  db.entries[current].items.push({paidFor_en:"",paidFor_te:"",amount:""});
+  db.entries[current].items.push({paidFor:"",amount:""});
   save();renderEntry();
 }
-function eName(i,v){
-  db.entries[current].items[i].paidFor_en=v;
-  db.entries[current].items[i].paidFor_te=toTelugu(v);
-  save();
-}
+function eName(i,v){db.entries[current].items[i].paidFor=v;save()}
 function eAmt(i,v){db.entries[current].items[i].amount=v;save()}
 function eDate(v){db.entries[current].date=v;save()}
 function sPaid(n,v){
@@ -192,7 +233,7 @@ function sPaid(n,v){
 }
 function saveEntry(){alert("Entry Saved");renderHome()}
 
-/* --------- PDF (MOBILE SAFE + TOTAL INCLUDED) --------- */
+/* ---------- PDF ---------- */
 function downloadPDF(){
   const e=db.entries[current];
   const doc=new jsPDF();
@@ -203,60 +244,36 @@ function downloadPDF(){
   doc.autoTable({
     startY:25,
     head:[["S.NO","Paid For","Amount"]],
-    body:e.items.map((it,i)=>[
-      i+1,
-      it.paidFor_en,
-      rs(it.amount)
-    ])
+    body:e.items.map((it,i)=>[i+1,it.paidFor,rs(it.amount)])
   });
 
   const total=e.items.reduce((s,x)=>s+Number(x.amount||0),0);
-
-  doc.text(
-    "TOTAL AMOUNT : " + rs(total),
-    14,
-    doc.lastAutoTable.finalY + 10
-  );
+  doc.text("TOTAL AMOUNT : " + rs(total),14,doc.lastAutoTable.finalY+10);
 
   doc.autoTable({
-    startY:doc.lastAutoTable.finalY + 20,
+    startY:doc.lastAutoTable.finalY+20,
     head:[["Name","Amount","Status"]],
-    body:e.settlement.map(s=>[
-      s.name,
-      rs(total/2),
-      s.paid?"Paid":"Not Paid"
-    ])
+    body:e.settlement.map(s=>[s.name,rs(total/2),s.paid?"Paid":"Not Paid"])
   });
 
-  const blobUrl = doc.output("bloburl");
-  window.open(blobUrl,"_blank");
+  window.open(doc.output("bloburl"),"_blank");
 }
 
-/* --------- EXPORT ALL --------- */
 function exportAll(){
   const doc=new jsPDF();
-
   db.entries.forEach((e,i)=>{
     if(i>0) doc.addPage();
     doc.text("AMRUTHA LAKSHMI ENCLAVE – BUDGET SUMMARY",10,10);
     doc.text(`Entry ${i+1} | Date: ${e.date}`,10,18);
-
     doc.autoTable({
       startY:25,
       head:[["S.NO","Paid For","Amount"]],
-      body:e.items.map((it,j)=>[
-        j+1,
-        it.paidFor_en,
-        rs(it.amount)
-      ])
+      body:e.items.map((it,j)=>[j+1,it.paidFor,rs(it.amount)])
     });
-
     const total=e.items.reduce((s,x)=>s+Number(x.amount||0),0);
     doc.text("TOTAL AMOUNT : " + rs(total),14,doc.lastAutoTable.finalY+10);
   });
-
-  const blobUrl = doc.output("bloburl");
-  window.open(blobUrl,"_blank");
+  window.open(doc.output("bloburl"),"_blank");
 }
 </script>
 
