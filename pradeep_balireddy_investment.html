@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pradeep Reddy & Balireddy Investment</title>
+
+<!-- jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+body{font-family:system-ui;margin:0;background:#f4fffb}
+header{background:#0fb7a5;color:#fff;padding:14px;text-align:center;font-weight:700}
+.container{padding:12px}
+.card{background:#fff;padding:12px;margin-bottom:12px;border-radius:12px}
+button{padding:8px 12px;border:none;border-radius:8px;background:#0fb7a5;color:#fff;margin-right:6px}
+button.danger{background:#ef4444}
+input,select{width:100%;padding:8px;margin:4px 0}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{border:1px solid #ccc;padding:6px;font-size:13px;text-align:center}
+.lock{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center}
+.lock-card{background:#fff;padding:20px;border-radius:12px;width:260px}
+.hidden{display:none}
+</style>
+</head>
+
+<body>
+<header>PRADEEP REDDY & BALIREDDY INVESTMENT</header>
+
+<!-- LOCK -->
+<div id="lock" class="lock">
+  <div class="lock-card">
+    <h3>🔐 Enter PIN</h3>
+    <input type="password" id="pinInput">
+    <button onclick="unlock()">Unlock</button>
+    <p id="lockMsg"></p>
+  </div>
+</div>
+
+<div class="container hidden" id="app">
+
+  <div class="card">
+    <button onclick="addRow()">➕ Add Entry</button>
+    <button onclick="saveData()">💾 Save</button>
+    <button onclick="downloadPDF()">⬇ PDF</button>
+    <button onclick="changePin()">🔁 Change PIN</button>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>S.No</th>
+          <th>Date</th>
+          <th>Amount Invested</th>
+          <th>Payment Mode</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+
+    <h3>Total Investment: <span id="total">Rs. 0</span></h3>
+  </div>
+</div>
+
+<script>
+const { jsPDF } = window.jspdf;
+const KEY = "PRADEEP_BALIREDDY_INVEST_V1";
+
+let db = JSON.parse(localStorage.getItem(KEY)) || {
+  pin: "0000",
+  rows: []
+};
+
+/* ---------- HELPERS ---------- */
+function rs(n){ return "Rs. " + Math.round(Number(n||0)); }
+function save(){ localStorage.setItem(KEY, JSON.stringify(db)); }
+
+/* ---------- LOCK ---------- */
+function unlock(){
+  if(pinInput.value === db.pin){
+    lock.style.display = "none";
+    app.classList.remove("hidden");
+    renderTable();
+  } else {
+    lockMsg.textContent = "Wrong PIN";
+  }
+}
+
+function changePin(){
+  const p = prompt("Enter new PIN (min 3 chars)");
+  if(p && p.length >= 3){
+    db.pin = p;
+    save();
+    alert("PIN updated");
+  }
+}
+
+/* ---------- TABLE ---------- */
+function renderTable(){
+  tableBody.innerHTML = "";
+  let total = 0;
+
+  db.rows.forEach((r,i)=>{
+    total += Number(r.amount||0);
+    tableBody.innerHTML += `
+      <tr>
+        <td>${i+1}</td>
+        <td><input type="date" value="${r.date}" onchange="update(${i},'date',this.value)"></td>
+        <td><input type="number" value="${r.amount}" onchange="update(${i},'amount',this.value)"></td>
+        <td>
+          <select onchange="update(${i},'mode',this.value)">
+            <option ${r.mode==="Cash"?"selected":""}>Cash</option>
+            <option ${r.mode==="Online"?"selected":""}>Online</option>
+            <option ${r.mode==="Cash & Online"?"selected":""}>Cash & Online</option>
+          </select>
+        </td>
+        <td>
+          <button class="danger" onclick="deleteRow(${i})">Delete</button>
+        </td>
+      </tr>
+    `;
+  });
+
+  document.getElementById("total").textContent = rs(total);
+}
+
+function addRow(){
+  db.rows.push({
+    date: new Date().toISOString().slice(0,10),
+    amount: "",
+    mode: "Cash"
+  });
+  renderTable();
+}
+
+function update(i,key,val){
+  db.rows[i][key] = key==="amount" ? Number(val) : val;
+}
+
+/* ---------- DELETE ---------- */
+function deleteRow(i){
+  if(confirm("Delete this entry?")){
+    db.rows.splice(i,1);
+    renderTable();
+  }
+}
+
+/* ---------- SAVE ---------- */
+function saveData(){
+  save();
+  alert("Data Saved");
+}
+
+/* ---------- PDF ---------- */
+function downloadPDF(){
+  const doc = new jsPDF();
+  let total = 0;
+
+  doc.text("PRADEEP REDDY & BALIREDDY INVESTMENT", 10, 10);
+
+  const body = db.rows.map((r,i)=>{
+    total += Number(r.amount||0);
+    return [i+1, r.date, rs(r.amount), r.mode];
+  });
+
+  doc.autoTable({
+    startY: 20,
+    head: [["S.No","Date","Amount","Payment Mode"]],
+    body
+  });
+
+  doc.text("Total Investment: " + rs(total), 14, doc.lastAutoTable.finalY + 10);
+
+  window.open(doc.output("bloburl"), "_blank");
+}
+
+/* INIT */
+renderTable();
+</script>
+</body>
+</html>
